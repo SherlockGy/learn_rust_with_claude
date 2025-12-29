@@ -1,0 +1,8 @@
+[package]
+name = "uniq-rs"
+version = "0.2.0"
+edition = "2021"
+description = "Remove consecutive duplicate lines with count option"
+license = "MIT"
+
+[dependencies]

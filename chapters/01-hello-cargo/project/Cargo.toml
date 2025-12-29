@@ -1,0 +1,8 @@
+[package]
+name = "echo-rs"
+version = "0.1.0"
+edition = "2021"
+description = "A simple echo command implementation in Rust"
+license = "MIT"
+
+[dependencies]

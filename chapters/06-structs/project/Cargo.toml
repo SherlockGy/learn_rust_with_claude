@@ -1,0 +1,8 @@
+[package]
+name = "task-cli"
+version = "0.1.0"
+edition = "2021"
+description = "A command-line task manager"
+license = "MIT"
+
+[dependencies]

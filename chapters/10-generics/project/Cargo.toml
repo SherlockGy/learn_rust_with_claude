@@ -1,0 +1,8 @@
+[package]
+name = "mini-vec"
+version = "0.1.0"
+edition = "2021"
+description = "A simplified dynamic array implementation"
+license = "MIT"
+
+[dependencies]

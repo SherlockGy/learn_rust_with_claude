@@ -1,0 +1,8 @@
+[package]
+name = "word-count"
+version = "0.2.0"
+edition = "2021"
+description = "A word count tool with modular structure"
+license = "MIT"
+
+[dependencies]

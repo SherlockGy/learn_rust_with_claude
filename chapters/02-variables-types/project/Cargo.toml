@@ -1,0 +1,8 @@
+[package]
+name = "word-count"
+version = "0.1.0"
+edition = "2021"
+description = "A simple word count tool in Rust"
+license = "MIT"
+
+[dependencies]

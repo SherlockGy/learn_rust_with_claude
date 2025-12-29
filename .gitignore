@@ -1,3 +1,6 @@
 .idea
 .vscode
 *.exe
+target/
+**/target/
+.claude
