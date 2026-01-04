@@ -8,10 +8,11 @@ fn main() {
         return;
     }
 
-    let (no_newline, text_args) = if args[0] == "-n" {
-        (true, &args[1..])
+    let no_newline = args[0] == "-n";
+    let text_args = if no_newline {
+        &args[1..]
     } else {
-        (false, &args[..])
+        &args[..]
     };
 
     let output = text_args.join(" ");

@@ -201,19 +201,55 @@ $ cargo run -- Hello World
 ["target/debug/echo-rs", "Hello", "World"]
 ```
 
-**命名解释**：
-- `std`：standard library，Rust 标准库
-- `env`：environment，环境相关功能
-- `args`：arguments，命令行参数
-- `collect`：收集。把迭代器的元素"收集"到一个集合中
+**`--` 是什么？** 这是告诉 cargo："后面的参数传给程序，不是给 cargo 的"。
 
-**代码解释**：
-- `use std::env`：引入标准库的 env 模块
-- `env::args()`：返回一个迭代器，包含所有命令行参数
-- `.collect()`：把迭代器的元素收集到 `Vec<String>` 中
-- `Vec<String>`：字符串的动态数组（Vector，缩写 Vec）
+---
 
-**注意**：第一个参数总是程序自身的路径！这和 Java 的 `args` 不同（Java 的 args 不包含程序名）。
+这行代码的模式你会经常看到，让我们用熟悉的 Java 概念来理解：
+
+```rust
+let args: Vec<String> = env::args().collect();
+```
+
+**`Vec<String>` 就是 Rust 版的 `ArrayList<String>`**：
+
+| Java | Rust | 说明 |
+|------|------|------|
+| `ArrayList<String>` | `Vec<String>` | 可变长度的字符串数组 |
+| `list.get(0)` | `args[0]` | 获取第一个元素 |
+| `list.size()` | `args.len()` | 获取长度 |
+| `list.isEmpty()` | `args.is_empty()` | 判断是否为空 |
+
+**`env::args().collect()` 的流水线模式**：
+
+这类似于 Java 8 的 Stream API：
+
+```java
+// Java 等价写法（概念上）
+List<String> args = Arrays.stream(rawArgs)
+    .collect(Collectors.toList());
+```
+
+```rust
+// Rust 写法
+let args: Vec<String> = env::args()  // 1. 获取参数迭代器
+    .collect();                       // 2. 收集到 Vec 中
+```
+
+> **💡 暂时不用深入理解**
+>
+> 迭代器和 `.collect()` 的详细原理会在第 12 章深入讲解。
+> 现在只需记住：这行代码的作用是"获取命令行参数，放到数组里"。
+
+---
+
+**代码各部分解释**：
+- `use std::env`：引入标准库的 env 模块（类似 Java 的 `import`）
+- `let`：声明变量（类似 Java 11+ 的 `var`，第 2 章详解）
+- `env::args()`：获取命令行参数
+- `{:?}`：调试格式打印（可以打印数组等复杂类型）
+
+**注意**：Rust 的 args 第一个参数是程序路径，Java 的 args 不包含程序名！
 
 ### 步骤 3：输出参数
 
@@ -254,16 +290,20 @@ use std::env;
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    // 检查是否有 -n 选项
+    // 没有参数时，输出空行
     if args.is_empty() {
         println!();
         return;
     }
 
-    let (no_newline, text_args) = if args[0] == "-n" {
-        (true, &args[1..])
+    // 检查第一个参数是否是 -n
+    let no_newline = args[0] == "-n";
+
+    // 确定要输出的文本参数
+    let text_args = if no_newline {
+        &args[1..]  // 跳过 -n，从第二个参数开始
     } else {
-        (false, &args[..])
+        &args[..]   // 使用全部参数
     };
 
     let output = text_args.join(" ");
@@ -278,15 +318,38 @@ fn main() {
 
 **新语法解释**：
 
-1. **切片（Slice）**：`&args[1..]` 表示从索引 1 开始到末尾的切片
-   - `&args[..]` 表示整个数组的切片
-   - 切片是对原数据的"视图"，不复制数据
+**1. 切片（Slice）—— 类似 Java 的 `subList()`**
 
-2. **元组解构**：`let (a, b) = ...` 同时给两个变量赋值
+切片是对数组一部分的"视图"，不复制数据：
 
-3. **`print!` vs `println!`**：
-   - `print!`：不带换行符
-   - `println!`：带换行符（ln = line）
+| Rust 切片 | 含义 | Java 类比 |
+|----------|------|----------|
+| `&args[1..]` | 从索引1到末尾 | `args.subList(1, args.size())` |
+| `&args[..]` | 全部元素 | `args` 本身 |
+| `&args[0..3]` | 索引0到2 | `args.subList(0, 3)` |
+
+> **💡 关于 `&` 符号**
+>
+> 切片前面的 `&` 表示"借用"，这是 Rust 所有权系统的核心概念。
+> 第 4 章会详细讲解，现在只需知道：`&args[1..]` 表示"引用 args 从索引1开始的部分"。
+
+**2. `print!` vs `println!`**：
+- `print!`：不带换行符
+- `println!`：带换行符（ln = line，换行的意思）
+
+**3. `if` 表达式返回值**：
+
+注意这个写法——Rust 的 `if` 可以返回值：
+
+```rust
+let text_args = if no_newline {
+    &args[1..]  // 如果有 -n，返回这个
+} else {
+    &args[..]   // 否则返回这个
+};
+```
+
+这类似于 Java 的三元运算符 `? :`，但更灵活（可以写多行）。
 
 ### 完整代码
 
@@ -301,10 +364,11 @@ fn main() {
         return;
     }
 
-    let (no_newline, text_args) = if args[0] == "-n" {
-        (true, &args[1..])
+    let no_newline = args[0] == "-n";
+    let text_args = if no_newline {
+        &args[1..]
     } else {
-        (false, &args[..])
+        &args[..]
     };
 
     let output = text_args.join(" ");
@@ -316,6 +380,8 @@ fn main() {
     }
 }
 ```
+
+短短 20 行代码，我们就实现了一个功能完整的命令行工具！
 
 ---
 
@@ -442,7 +508,7 @@ public class Echo {
 
 ## 练习
 
-### 练习 1：添加 --help 选项
+### 练习 1：添加 --help 选项 ⭐
 
 让程序支持 `--help` 选项，输出使用说明：
 
@@ -454,7 +520,26 @@ Echo the STRING(s) to standard output.
   -n    do not output the trailing newline
 ```
 
-### 练习 2：支持 -e 选项（挑战）
+**提示**：检查 `args[0]` 是否等于 `"--help"`，如果是就打印帮助信息并返回。
+
+### 练习 2：同时支持 -n 和 --help ⭐⭐
+
+让程序能正确处理多种情况：
+
+```bash
+$ echo-rs --help      # 输出帮助
+$ echo-rs -n --help   # 应该输出 "--help"（-n 后面都是文本）
+$ echo-rs -n Hello    # 输出 "Hello" 不换行
+```
+
+**提示**：注意处理顺序和边界情况。
+
+### 练习 3：支持 -e 转义选项 ⭐⭐⭐（挑战）
+
+> **💡 建议学完第 7 章后再尝试**
+>
+> 此练习需要用到模式匹配和字符串遍历，这些概念会在后续章节讲解。
+> 如果你有 Rust 基础或想挑战自己，可以现在尝试。
 
 真正的 `echo` 还支持 `-e` 选项，解释转义字符：
 
@@ -462,9 +547,12 @@ Echo the STRING(s) to standard output.
 $ echo-rs -e "Hello\nWorld"
 Hello
 World
+
+$ echo-rs -e "Tab:\there"
+Tab:	here
 ```
 
-提示：你需要手动处理 `\n`、`\t` 等转义序列。
+需要处理的转义序列：`\n`（换行）、`\t`（制表符）、`\\`（反斜杠）。
 
 ---
 
@@ -477,4 +565,16 @@ World
 
 ## 下一章预告
 
-我们的 echo-rs 工作正常，但只能输出固定的文本。下一章，我们将构建 `word-count` 工具，学习 Rust 的变量和类型系统。你会发现 Rust 对类型的处理和 Java 有很大不同——特别是字符串。
+我们的 echo-rs 工作正常！但代码中有些地方你可能还有疑问：
+
+- 为什么用 `let` 声明变量？变量能修改吗？
+- `Vec<String>` 的 `String` 和字符串字面量 `"hello"` 是一回事吗？
+- `.skip(1).collect()` 这个链式调用到底怎么工作的？
+
+下一章，我们将构建 **word-count** 工具（统计文本行数/单词数/字符数），深入学习：
+
+- **Rust 默认不可变**：为什么这是刻意的设计？
+- **`&str` vs `String`**：Rust 为什么有两种字符串类型？
+- **类型推断**：为什么有时需要标注类型，有时不需要？
+
+你会发现 Rust 的变量和类型系统与 Java 有根本性的不同——这正是 Rust 强大的基础。
