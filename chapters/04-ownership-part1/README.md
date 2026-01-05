@@ -233,6 +233,30 @@ s2                      堆
 
 **Clone 的代价**：有运行时开销，特别是大数据结构。
 
+**为什么 Rust 不自动 clone？**
+
+Rust 的原则：**你不为你不用的东西付费**。
+- 移动（move）是零成本——只是指针赋值
+- 克隆（clone）有运行时开销——内存分配、数据复制
+- 如果语言偷偷帮你 clone，你可能不知道每次赋值都在"花钱"
+
+所以 Rust 选择：显式优于隐式。想 clone 就自己写 `.clone()`。
+
+**为什么 `vec.push(item)` 要拿走 item 的所有权？**
+
+```rust
+let mut v = Vec::new();
+let s = String::from("hello");
+v.push(s);  // s 的所有权移动到 Vec 里
+// s 不能再用了
+```
+
+因为 Vec 要**长期持有**这个数据。如果只是借用：
+- `s` 的原所有者可能先离开作用域
+- `s` 被释放后，Vec 里就是悬垂指针
+
+**规则**：谁要长期存储数据，谁就要拥有所有权。
+
 ### 5. 借用（Borrowing）
 
 **问题**：如果只是想"看看"数据，不想获取所有权怎么办？
@@ -288,6 +312,34 @@ s: String               堆
 │ ptr         │ （指向 s，不拥有数据）
 └─────────────┘
 ```
+
+### 6. 方法签名：self vs &self
+
+**如何知道调用方法后原值还能不能用？**
+
+看方法签名：
+
+```rust
+fn unwrap(self) -> T        // self = 消费，调用后原值没了
+fn len(&self) -> usize      // &self = 借用，调用后原值还在
+fn push(&mut self, item: T) // &mut self = 可变借用，原值还在
+```
+
+这就是为什么：
+```rust
+let result: Result<String, Error> = Ok("hello".to_string());
+let s = result.unwrap();  // unwrap 消费了 result
+// result 不能再用了
+
+let s = String::from("hello");
+let len = s.len();        // len 只是借用
+println!("{}", s);        // s 还能用
+```
+
+**命名惯例提示**：
+- `into_*` 方法通常消费 self（如 `into_bytes()`、`into_iter()`）
+- `as_*` 方法通常借用（如 `as_bytes()`、`as_str()`）
+- `to_*` 方法通常借用并返回新值（如 `to_string()`、`to_vec()`）
 
 ---
 
