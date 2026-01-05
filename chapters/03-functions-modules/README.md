@@ -185,17 +185,32 @@ src/                             src/
 | IDE 标签显示 | 多个 `mod.rs` 难以区分 | `counter.rs`, `output.rs` 一目了然 |
 | 声明子模块 | 在 `mod.rs` 中写 `mod utils;` | 在 `counter.rs` 中写 `mod utils;` |
 
-**为什么改变？**
+**为什么改变？**（[RFC 2126](https://rust-lang.github.io/rfcs/2126-path-clarity.html)）
 
-2015 风格的痛点：打开多个模块时，IDE 标签栏全是 `mod.rs`：
+2015 风格有三个痛点：
+
+**痛点 1：重构困难（最主要）**
+
+想给 `counter.rs` 添加子模块 `utils` 时：
 ```
-[mod.rs] [mod.rs] [mod.rs] [mod.rs]  // 哪个是哪个？
+# Rust 2015：必须移动文件
+1. 创建 counter/ 目录
+2. 把 counter.rs 移动为 counter/mod.rs  ← 要移动原文件！
+3. 创建 counter/utils.rs
+4. 修改 git 历史...
+
+# Rust 2018+：直接添加
+1. counter.rs 保持不动
+2. 创建 counter/utils.rs  ← 完成！
 ```
 
-2018 风格解决了这个问题：
-```
-[counter.rs] [output.rs] [utils.rs]  // 清晰！
-```
+**痛点 2：可学习性差**
+
+模块路径与文件路径不直接对应，新手困惑"为什么 `counter` 模块的代码在 `counter/mod.rs` 而不是 `counter.rs`？"
+
+**痛点 3：编辑器导航**
+
+打开多个模块时，IDE 标签栏全是 `mod.rs`，需要依赖编辑器智能才能区分。
 
 **具体示例**
 
