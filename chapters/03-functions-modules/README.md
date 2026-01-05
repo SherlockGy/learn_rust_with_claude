@@ -152,16 +152,68 @@ fn main() {
 
 当你写 `mod foo;`，Rust 会按以下顺序查找：
 
-1. `foo.rs`（同级目录）
-2. `foo/mod.rs`（子目录）
+1. `foo.rs`（同级目录）——**推荐方式**
+2. `foo/mod.rs`（子目录）——旧风格
 
 ```
 src/
 ├── main.rs        // mod counter;
-├── counter.rs     // 选项 1：单文件模块
-└── counter/       // 选项 2：目录模块
+├── counter.rs     // 推荐：单文件模块
+└── counter/       // 旧风格：目录模块
     └── mod.rs
 ```
+
+**版本演变：Rust 2015 vs 2018 模块系统**
+
+Rust 的模块系统在 2018 版本有重大改进，你在网上会看到两种风格的代码：
+
+**场景：counter 模块有一个子模块 utils**
+
+```
+// Rust 2015 风格                // Rust 2018+ 风格（推荐）
+src/                             src/
+├── main.rs                      ├── main.rs
+└── counter/                     ├── counter.rs        // counter 模块入口
+    ├── mod.rs   // 入口         └── counter/
+    └── utils.rs                     └── utils.rs      // 子模块
+```
+
+| 对比 | Rust 2015 | Rust 2018+ |
+|-----|-----------|------------|
+| 模块入口 | `foo/mod.rs` | `foo.rs` |
+| 子模块位置 | `foo/` 目录下 | `foo/` 目录下（相同） |
+| IDE 标签显示 | 多个 `mod.rs` 难以区分 | `counter.rs`, `output.rs` 一目了然 |
+| 声明子模块 | 在 `mod.rs` 中写 `mod utils;` | 在 `counter.rs` 中写 `mod utils;` |
+
+**为什么改变？**
+
+2015 风格的痛点：打开多个模块时，IDE 标签栏全是 `mod.rs`：
+```
+[mod.rs] [mod.rs] [mod.rs] [mod.rs]  // 哪个是哪个？
+```
+
+2018 风格解决了这个问题：
+```
+[counter.rs] [output.rs] [utils.rs]  // 清晰！
+```
+
+**具体示例**
+
+```rust
+// Rust 2015：counter/mod.rs
+pub mod utils;  // 声明子模块，找 counter/utils.rs
+pub fn count() { ... }
+
+// Rust 2018+：counter.rs（推荐）
+pub mod utils;  // 声明子模块，找 counter/utils.rs
+pub fn count() { ... }
+```
+
+代码内容完全一样，只是文件名和位置不同。
+
+**注意**：两种风格不能混用！同一个模块要么用 `foo.rs`，要么用 `foo/mod.rs`，不能同时存在。
+
+**本教程使用 2018 风格**（Cargo.toml 中 `edition = "2021"`）。如果在网上看到 `mod.rs` 风格的代码，那是旧写法，逻辑是一样的。
 
 **可见性：pub 关键字**
 
@@ -235,6 +287,100 @@ use super::parent;    // 父模块的项
 - `crate`：当前 crate 的根
 - `self`：当前模块
 - `super`：父模块
+
+### 4. mod vs use：核心区别
+
+这是 Java 开发者最容易混淆的点。让我们对比：
+
+**Java**：
+```java
+import com.example.Counter;  // Counter.java 必须存在于对应目录
+// Java 自动发现：文件存在 = 类存在
+```
+
+**Rust**：
+```rust
+mod counter;        // ① 声明模块存在（必须！）
+use crate::counter; // ② 简化路径（可选）
+```
+
+| 对比 | Java import | Rust mod | Rust use |
+|-----|-------------|----------|----------|
+| 作用 | 导入类 | 声明模块存在 | 简化路径 |
+| 必要性 | 可选（可用全限定名） | 必须 | 可选 |
+| 类比 | — | 定义 | 导入 |
+
+**关键理解**：
+- `mod counter;` 告诉编译器："去找 `counter.rs`，把它加入模块树"
+- 没有 `mod` 声明，即使文件存在，编译器也不知道这个模块
+- `use` 只是路径别名，不影响模块是否存在
+
+**为什么 Rust 需要显式 mod？**
+1. **编译控制**：明确哪些文件参与编译
+2. **条件编译**：`#[cfg(test)] mod tests;` 只在测试时编译
+3. **不依赖文件系统**：模块结构由代码定义，不是目录结构决定
+
+**常见误区**：
+```rust
+// 错误理解：以为 use 能让模块"存在"
+use crate::counter;  // ❌ 如果没有 mod counter; 这会报错
+
+// 正确理解：先 mod 声明，再 use（可选）
+mod counter;         // ✅ 声明模块
+use crate::counter::CountResult;  // 可选：简化路径
+```
+
+### 5. 内部模块 vs 外部 crate
+
+`mod` 只用于**当前项目内部**的模块。第三方依赖（如 serde）不需要 `mod`：
+
+| 类型 | 声明方式 | 使用方式 |
+|-----|---------|---------|
+| **本项目内部模块** | `mod counter;`（在代码中） | `use crate::counter;` |
+| **第三方 crate** | `Cargo.toml` 中添加依赖 | 直接 `use serde::...` |
+
+```rust
+// Cargo.toml
+[dependencies]
+serde = "1.0"
+
+// main.rs
+mod counter;           // ✅ 内部模块：需要 mod 声明
+use crate::counter::CountResult;
+
+use serde::Serialize;  // ✅ 外部 crate：直接 use，不需要 mod
+```
+
+**为什么外部 crate 不需要 mod？**
+- `mod` 是让编译器去找 `.rs` 文件并编译
+- 外部 crate 已经是**编译好的**，Cargo 根据 `Cargo.toml` 自动下载和链接
+- 你只需要 `use` 引入它的公开 API
+
+**历史补充：extern crate**
+
+Rust 2015 中，使用外部 crate 需要写：
+```rust
+extern crate serde;  // Rust 2015 需要
+use serde::Serialize;
+```
+
+Rust 2018+ 后，`extern crate` 大多数情况下**不再需要**，Cargo.toml 声明即可。如果在旧代码中看到 `extern crate`，知道这是历史写法就行。
+
+### 6. 内联模块（补充）
+
+`mod` 有两种形式：
+
+```rust
+// 文件模块：代码在另一个文件
+mod counter;  // 去找 counter.rs
+
+// 内联模块：代码在当前文件
+mod helper {
+    pub fn do_something() { /* ... */ }
+}
+```
+
+本章只使用文件模块。内联模块常见于测试代码（`#[cfg(test)] mod tests { ... }`）。
 
 ---
 
@@ -527,6 +673,25 @@ src/
 
 Rust 的结构更扁平，不需要深层嵌套的目录。
 
+### 最关键的区别：mod vs import
+
+```java
+// Java：文件存在 = 包/类存在（自动发现）
+src/com/example/Counter.java  →  com.example.Counter 自动可用
+import com.example.Counter;   // 只是简化路径，不影响类是否存在
+```
+
+```rust
+// Rust：必须显式声明模块存在
+// 即使 counter.rs 存在，没有下面这行也不行：
+mod counter;         // 告诉编译器：把 counter.rs 加入模块树
+use crate::counter;  // 可选：简化路径
+```
+
+**记忆口诀**：
+- Java：`import` ≈ Rust `use`（都是路径简化）
+- Rust 额外需要 `mod` 来"声明模块存在"（Java 没有对应概念，因为自动发现）
+
 ---
 
 ## 要点回顾
@@ -645,6 +810,8 @@ $ word-count file1.txt file2.txt
 
 - [Rust Book: Defining Modules](https://doc.rust-lang.org/book/ch07-02-defining-modules-to-control-scope-and-privacy.html)
 - [Rust Book: Paths](https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html)
+- [Rust 2018 模块系统变化](https://doc.rust-lang.org/edition-guide/rust-2018/path-changes.html)：了解 2015 → 2018 的演变细节
+- `pub use` 重导出：高级用法，可以重新组织公开 API，后续遇到库开发时再学
 
 ---
 
