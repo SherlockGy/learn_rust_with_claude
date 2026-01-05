@@ -266,7 +266,7 @@ pub fn count_text(text: &str) -> CountResult {
 
 **语法说明**：
 - `///` 是文档注释，会生成 API 文档
-- `pub struct` 定义公开的结构体
+- `pub struct` 定义公开的结构体（结构体详见第6章，这里先简单使用）
 - 结构体字段也需要 `pub` 才能在外部访问
 
 ### 步骤 2：创建输出模块
@@ -293,7 +293,9 @@ pub fn print_result(result: &CountResult, filename: Option<&str>) {
 **语法说明**：
 - `use crate::counter::CountResult`：从当前 crate 的 counter 模块引入 CountResult
 - `Option<&str>`：可选的字符串引用，表示可能有文件名也可能没有
-- `match` 是模式匹配（后续章节详解）
+  - 类似 Java 的 `@Nullable String` 或 `Optional<String>`
+  - `Some(值)` 表示有值，`None` 表示没有（第7章详解）
+- `match` 是模式匹配，类似 Java 的 switch 但更强大（第7章详解）
 
 ### 步骤 3：重写 main.rs
 
@@ -336,18 +338,26 @@ fn main() {
 
 1. **`mod counter;`**：声明模块，告诉 Rust 去找 `counter.rs`
 
-2. **`fs::read_to_string`**：读取整个文件为 String
-   - 返回 `Result<String, Error>`
-   - 成功返回 `Ok(内容)`，失败返回 `Err(错误)`
+2. **`&mut text`**：可变借用
+   - `read_to_string` 需要修改 `text`，所以要传可变引用
+   - 可变借用详见第5章
 
-3. **`match`**：模式匹配
+3. **`fs::read_to_string`**：读取整个文件为 String
+   - 返回 `Result<String, Error>`——可能成功，也可能失败
+   - 成功返回 `Ok(内容)`，失败返回 `Err(错误)`
+   - Result 和错误处理详见第8章
+
+4. **`match`**：模式匹配
    - `Ok(text) => ...`：成功时执行
    - `Err(e) => ...`：失败时执行
 
-4. **`eprintln!`**：打印到标准错误（stderr）
+5. **`eprintln!`**：打印到标准错误（stderr）
    - `e` = error，打印错误信息
 
-5. **`&args`**：借用 args 进行迭代（不获取所有权）
+6. **`for filename in &args`**：借用 args 进行迭代
+   - 为什么用 `&args` 而不是 `args`？因为我们只想遍历，不想消费 `args`
+   - 如果直接写 `for filename in args`，args 的所有权会被移动，之后就不能再用了
+   - 借用详见第4章
 
 ### 步骤 4：项目结构
 
@@ -608,7 +618,7 @@ pub struct Config {
 
 ## 练习
 
-### 练习 1：添加汇总统计
+### 练习 1：添加汇总统计 ⭐⭐
 
 多文件时输出汇总：
 
@@ -621,11 +631,11 @@ $ word-count file1.txt file2.txt
 
 提示：在 `CountResult` 上实现 `add` 方法或累加统计。
 
-### 练习 2：提取文件读取到单独模块
+### 练习 2：提取文件读取到单独模块 ⭐
 
 创建 `reader.rs` 模块，处理文件和标准输入的读取逻辑。
 
-### 练习 3：添加帮助信息模块
+### 练习 3：添加帮助信息模块 ⭐
 
 创建 `help.rs` 模块，支持 `--help` 选项。
 
