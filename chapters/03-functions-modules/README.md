@@ -187,30 +187,74 @@ src/                             src/
 
 **为什么改变？**（[RFC 2126](https://rust-lang.github.io/rfcs/2126-path-clarity.html)）
 
-2015 风格有三个痛点：
+用一个具体场景来说明：
 
-**痛点 1：重构困难（最主要）**
+**① 原来是什么样（Rust 2015 的规则）**
 
-想给 `counter.rs` 添加子模块 `utils` 时：
+Rust 2015 有一条规则：**如果模块有子模块，它必须是 `目录/mod.rs` 形式**。
+
 ```
-# Rust 2015：必须移动文件
+# 没有子模块时：可以用单文件
+src/
+├── main.rs
+└── counter.rs      ✅ counter 模块
+
+# 有子模块时：必须用目录 + mod.rs
+src/
+├── main.rs
+└── counter/
+    ├── mod.rs      ← counter 模块的代码必须在这里
+    └── utils.rs    ← counter::utils 子模块
+```
+
+**② 需求是什么（常见的重构场景）**
+
+你已经有一个 `counter.rs`，现在想给它添加一个子模块 `utils`：
+
+```
+# 现状
+src/
+├── main.rs
+└── counter.rs      ← 已有 500 行代码
+
+# 目标：给 counter 添加子模块 utils
+counter::utils
+```
+
+**③ Rust 2015 的痛点：必须移动文件**
+
+因为规则要求"有子模块 = 必须用 mod.rs"，你被迫：
+
+```
 1. 创建 counter/ 目录
-2. 把 counter.rs 移动为 counter/mod.rs  ← 要移动原文件！
+2. 把 counter.rs 重命名为 counter/mod.rs  ← 移动文件！
 3. 创建 counter/utils.rs
-4. 修改 git 历史...
-
-# Rust 2018+：直接添加
-1. counter.rs 保持不动
-2. 创建 counter/utils.rs  ← 完成！
+4. git 历史被打断（显示为删除+新建，而非修改）
 ```
 
-**痛点 2：可学习性差**
+**④ Rust 2018+ 的改进：文件不用动**
 
-模块路径与文件路径不直接对应，新手困惑"为什么 `counter` 模块的代码在 `counter/mod.rs` 而不是 `counter.rs`？"
+新规则：**`foo.rs` 和 `foo/` 目录可以同时存在**。
 
-**痛点 3：编辑器导航**
+```
+# Rust 2018+：直接添加子模块，原文件不动
+src/
+├── main.rs
+├── counter.rs      ← 保持原位，500 行代码不用动
+└── counter/
+    └── utils.rs    ← 直接创建子模块
 
-打开多个模块时，IDE 标签栏全是 `mod.rs`，需要依赖编辑器智能才能区分。
+# 只需在 counter.rs 中添加一行：
+pub mod utils;
+```
+
+**总结：三个改进点**
+
+| 痛点 | Rust 2015 | Rust 2018+ |
+|-----|-----------|------------|
+| 添加子模块 | 必须移动原文件为 `mod.rs` | 原文件不动，直接加 |
+| 文件名 | 多个 `mod.rs` 分不清 | `counter.rs` 一目了然 |
+| 心智负担 | "有子模块就要改结构" | "加文件就行" |
 
 **具体示例**
 
