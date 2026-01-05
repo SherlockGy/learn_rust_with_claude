@@ -227,8 +227,8 @@ Rust 可以从变量的使用方式"回溯"推断类型，Java 只能从初始�
 **简化理解**（后续章节会深入）：
 
 ```rust
-let s1 = "Hello";           // &str - 字符串字面量，硬编码在程序中
-let s2 = String::from("Hello");  // String - 堆上分配，可修改
+let s1 = "Hello";                    // &str - 胖指针(ptr+len)，指向只读数据
+let s2 = String::from("Hello");      // String - 结构体(ptr+len+cap)，管理堆上可变数据
 
 let s3 = "Hello".to_string();    // &str -> String
 let s4: &str = &s2;              // String -> &str（借用）
@@ -237,9 +237,9 @@ let s4: &str = &s2;              // String -> &str（借用）
 **为什么 Rust 要这样设计？**
 
 这涉及所有权系统（第 4-5 章详解）。简单说：
-- `&str` 是"视图"，不拥有数据，不能独立存在
-- `String` 拥有数据，负责内存管理
-- 这种区分让内存管理更精确，避免不必要的复制
+- `&str` 是胖指针（栈上16字节），借用别处的字符串数据
+- `String` 是结构体（栈上24字节），拥有并管理堆上的数据
+- 两者栈上大小都固定，区别在于：谁负责释放数据？String 负责，`&str` 不负责
 
 **现阶段的使用建议**：
 - 字符串字面量：用 `&str`
@@ -271,11 +271,22 @@ fn main() {
 
 这是多重导入语法，等价于：
 ```rust
-use std::io;           // 导入 io 模块本身
-use std::io::BufRead;  // 导入 BufRead trait
+use std::io;           // 导入 io 模块本身（才能写 io::stdin()）
+use std::io::BufRead;  // 导入 BufRead trait（才能用 .lines() 方法）
 ```
 
 `{self, BufRead}` 中的 `self` 代表模块本身，这样写更简洁。
+
+**与 Java 的关键区别**：
+
+| Java | Rust | 效果 |
+|------|------|------|
+| `import java.io.*` | ❌ 没有对应写法 | Java 导入包下所有类 |
+| `import java.io.File` | `use std::io::BufRead` | 导入具体项 |
+| — | `use std::io` | 只导入模块本身 |
+
+Rust 的 `use std::io` **不会**导入 `io` 下的任何内容，只是让你能写 `io::xxx`。
+要用 `BufRead` 的方法，必须显式导入它——这是 Rust trait 的规则（第 10 章详解）。
 
 **`line.unwrap()` 是什么？**
 
@@ -350,7 +361,23 @@ fn main() {
 
 **命名解释**：
 - `split_whitespace()`：按空白字符（空格、制表符等）分割
-- `count()`：计算迭代器中元素的数量
+- `count()`：消费迭代器，返回元素数量
+
+**与 Java 的关键区别**：
+
+```java
+// Java: split 立即执行，返回数组
+String[] words = line.split("\\s+");  // 立即分配数组
+int count = words.length;
+```
+
+```rust
+// Rust: split_whitespace 返回迭代器，惰性求值
+let count = line.split_whitespace().count();  // 不产生中间数组
+```
+
+Rust 的方式更高效：迭代器是惰性的，`count()` 直接遍历计数，不需要先创建数组再取长度。
+这类似 Java 8 的 Stream，但 Rust 迭代器是零成本抽象——编译后和手写循环一样快。
 
 ### 步骤 4：统计字符数
 
@@ -479,7 +506,20 @@ $ echo "Hello World" | wc
        1       2      12    # wc 把换行符也算进去了
 ```
 
-**注意**：我们的实现和系统 `wc` 在字符计数上有细微差异，因为对换行符的处理不同。这是正常的。
+**为什么字符数差 1？**
+
+| 工具 | "Hello World" 字符数 | 原因 |
+|-----|---------------------|------|
+| 系统 `wc` | 12 | 11个字符 + 1个换行符 |
+| 我们的实现 | 11 | 假设最后一行没有换行符 |
+
+详细解释：
+1. `echo "Hello World"` 实际输出的是 `Hello World\n`（末尾有换行符）
+2. `lines()` 读取时会**自动去掉**每行的换行符
+3. 我们的代码用 `+1` 补回换行符，但在最后又 `-1`（假设最后一行没换行符）
+4. 而 `echo` 的输出确实有换行符，所以 `wc` 计数为 12
+
+这是设计选择的差异，不是 bug。真实的 `wc` 逐字节读取，我们用 `lines()` 按行读取。
 
 ---
 
