@@ -10,12 +10,12 @@ fn main() {
         let line = line.unwrap();
         line_count += 1;
         word_count += line.split_whitespace().count();
-        char_count += line.chars().count() + 1; // +1 for newline
+        char_count += line.chars().count() + 1; // +1 补回换行符
     }
 
-    // Handle edge case: empty input or last line without newline
+    // 处理边界情况：假设最后一行没有换行符
     if line_count > 0 {
-        char_count -= 1; // Remove the extra newline count for the last line
+        char_count -= 1; // 减去最后一行多加的换行符
     }
 
     println!("{:>8}{:>8}{:>8}", line_count, word_count, char_count);
