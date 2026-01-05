@@ -265,6 +265,30 @@ fn main() {
 }
 ```
 
+**语法解释**：
+
+**`use std::io::{self, BufRead}` 是什么？**
+
+这是多重导入语法，等价于：
+```rust
+use std::io;           // 导入 io 模块本身
+use std::io::BufRead;  // 导入 BufRead trait
+```
+
+`{self, BufRead}` 中的 `self` 代表模块本身，这样写更简洁。
+
+**`line.unwrap()` 是什么？**
+
+`lines()` 返回的每一行是 `Result<String, Error>` 类型——可能成功，也可能失败（比如读取出错）。
+
+- `unwrap()` 的意思是："我确定这里不会出错，直接取出值"
+- 如果真的出错了，程序会 panic（崩溃）
+
+> **💡 关于错误处理**
+>
+> `Result` 类型和正确的错误处理方式会在第 8 章详细讲解。
+> 现在用 `unwrap()` 是为了简化代码，实际项目中应该优雅地处理错误。
+
 **命名解释**：
 - `io`：input/output，输入输出模块
 - `stdin`：standard input，标准输入
@@ -379,6 +403,21 @@ fn main() {
     // 格式化输出：右对齐，宽度 8
     println!("{:>8}{:>8}{:>8}", line_count, word_count, char_count);
 }
+```
+
+**为什么这里要标注 `: usize`？**
+
+前面步骤中我们写 `let mut line_count = 0;`，编译器默认推断为 `i32`。
+
+但 `.count()` 返回的是 `usize`（无符号整数，用于表示大小/长度）。如果类型不一致，`+=` 会报错。
+
+两种解决方式：
+```rust
+let mut count = 0;           // i32
+count += num as i32;         // 每次转换
+
+let mut count: usize = 0;    // 直接声明为 usize（更简洁）
+count += num;
 ```
 
 **格式化语法**：
@@ -556,7 +595,7 @@ let x = x + 1;  // 创建新的 x，旧的被遮蔽
 
 ## 练习
 
-### 练习 1：添加 -l/-w/-c 选项
+### 练习 1：添加 -l/-w/-c 选项 ⭐
 
 让程序支持只输出特定统计项：
 
@@ -569,14 +608,30 @@ $ echo "Hello World" | word-count -c
       11
 ```
 
-### 练习 2：支持多个选项组合
+**提示**：结合第 1 章学的命令行参数处理，用 `env::args()` 获取参数，判断是 `-l`、`-w` 还是 `-c`。
+
+### 练习 2：支持多个选项组合 ⭐⭐
 
 ```bash
 $ echo "Hello World" | word-count -lw
        1       2
+$ echo "Hello World" | word-count -wc
+       2      11
 ```
 
-提示：使用我们在第 1 章学到的命令行参数处理。
+**提示**：需要遍历参数字符串的每个字符，判断包含哪些选项。可以用 `.contains('l')` 或遍历 `.chars()`。
+
+### 练习 3：支持从文件读取 ⭐⭐（预习）
+
+> **💡 这是下一章的内容预习**
+>
+> 如果你想提前挑战，可以尝试让程序支持从文件读取：
+> ```bash
+> $ word-count README.md
+>       42     256    1832 README.md
+> ```
+>
+> 提示：使用 `std::fs::File` 和 `BufReader`。
 
 ---
 
