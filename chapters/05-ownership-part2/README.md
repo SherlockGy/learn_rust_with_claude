@@ -18,7 +18,7 @@
 
 ## 项目：升级 uniq-rs 支持计数
 
-### 本章目标
+### 项目目标
 
 为 uniq-rs 添加 `-c` 选项，显示每行重复的次数：
 
@@ -29,7 +29,7 @@ $ cat data.txt | uniq-rs -c
       1 apple
 ```
 
-这个功能需要**可变引用**：我们要在循环中累加计数器。
+这个功能需要**可变变量**：我们要在循环中累加计数器，这引出了可变性与借用的话题。
 
 ---
 
@@ -306,6 +306,132 @@ let holder;
 // 如果这里还能用 holder，就会访问无效内存！
 ```
 
+#### 作为调用者：只看签名就够了
+
+你可能会担心：如果我不知道函数内部实现，怎么知道返回值是否依赖输入参数？
+
+答案是：**看签名就够了**。生命周期标注是 API 的一部分，是函数作者和调用者之间的契约。
+
+```rust
+// 签名 1：输出和输入绑定（相同的 'a）
+fn get_slice<'a>(&'a self) -> &'a [u8]
+//               ^^            ^^
+//               相同的 'a = 有依赖关系
+
+// 签名 2：输出和输入无关
+fn get_static(&self) -> &'static str
+//                       ^^^^^^^
+//                       'static = 和 self 无关
+
+// 签名 3：返回拥有所有权的值
+fn to_vec(&self) -> Vec<u8>
+//                  ^^^^^^
+//                  没有 & = 返回全新的值，无依赖
+```
+
+你不需要看实现，签名已经告诉你一切。
+
+**更直观的例子**：
+
+```rust
+impl MyData {
+    // 情况 A：返回内部数据的引用
+    fn inner(&self) -> &String {
+        &self.data  // 返回值依赖 self
+    }
+
+    // 情况 B：返回新创建的值
+    fn cloned(&self) -> String {
+        self.data.clone()  // 返回全新的 String，无依赖
+    }
+
+    // 情况 C：返回静态数据
+    fn name(&self) -> &'static str {
+        "constant"  // 和 self 完全无关
+    }
+}
+```
+
+看签名就知道：
+- `&self -> &String`：有依赖（相同的隐式生命周期）
+- `&self -> String`：无依赖（返回的是拥有所有权的值）
+- `&self -> &'static str`：无依赖（显式标注了 `'static`）
+
+#### 如果返回值可能来自多个入参？
+
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+```
+
+编译器也不知道返回的是 `x` 还是 `y`，所以它采取**保守策略**：
+
+```rust
+fn main() {
+    let mut a = String::from("hello");
+    let mut b = String::from("hi");
+
+    let result = longest(&a, &b);
+
+    // 编译器不知道 result 是 a 还是 b
+    // 所以两个都"锁住"！
+
+    a.push_str("!");  // ❌ 不行，a 可能被借用了
+    b.push_str("!");  // ❌ 不行，b 可能被借用了
+
+    println!("{}", result);
+}
+```
+
+**如果想精确控制？** 用不同的生命周期：
+
+```rust
+// 明确告诉编译器：返回值只和 x 有关
+fn first<'a, 'b>(x: &'a str, y: &'b str) -> &'a str {
+    x  // 只能返回 x，返回 y 会编译错误
+}
+
+fn main() {
+    let mut a = String::from("hello");
+    let mut b = String::from("hi");
+
+    let result = first(&a, &b);
+
+    // 编译器知道 result 只依赖 a
+    b.push_str("!");  // ✅ 可以，b 没被借用
+
+    println!("{}", result);
+}
+```
+
+#### 生命周期 vs 可变性：两套独立的系统
+
+你可能会问：生命周期说的是"活多久"，那"能不能改"由谁决定？
+
+答案是：**这是两套独立的系统**。
+
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str
+//             ^^^^^       ^^^^^
+//             这里的 & 表示不可变借用
+```
+
+- **生命周期**（`'a`）：管引用"能活多久"
+- **可变性**（`&` vs `&mut`）：管"能不能改"
+
+签名里写的是 `&`（共享引用），编译器就知道是不可变借用。这不是生命周期决定的。
+
+**总结**：作为调用者，从签名获取的信息
+
+| 看什么 | 知道什么 |
+|-------|---------|
+| 相同 `'a` 的参数 | 在返回值存活期间都被借用（"锁住"）|
+| `&` 还是 `&mut` | 不可变借用还是可变借用 |
+| 返回值有没有 `&` | 是借用的引用，还是全新的值 |
+
+签名就是契约，足够你安全使用。
+
 #### 总结
 
 | 场景 | `'a` 约束谁？ | 不能活过谁？ |
@@ -389,7 +515,7 @@ fn main() {
             count = 1;
             first = false;
         } else if line == prev_line {
-            count += 1;  // 需要可变引用来修改 count
+            count += 1;  // count 是 mut 变量，可以直接修改
         } else {
             print_line(&prev_line, count, count_mode);
             prev_line = line;

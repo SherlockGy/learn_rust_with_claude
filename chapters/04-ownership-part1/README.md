@@ -85,10 +85,10 @@ apple
 
 ### 为什么选这个项目？
 
-实现 uniq-rs 时，我们会自然遇到所有权问题：
-- 比较两行需要访问同一个变量
-- 存储"上一行"需要转移所有权
-- 这些问题逼着我们理解所有权
+实现 uniq-rs 时，会自然接触到所有权的核心概念：
+- 比较两行时需要访问同一个变量
+- 存储"上一行"涉及所有权转移
+- 这些场景是学习所有权的最佳切入点
 
 ### 最终效果
 
@@ -341,6 +341,175 @@ println!("{}", s);        // s 还能用
 - `as_*` 方法通常借用（如 `as_bytes()`、`as_str()`）
 - `to_*` 方法通常借用并返回新值（如 `to_string()`、`to_vec()`）
 
+**为什么要设计"消耗 self"的方法？**
+
+初学者可能觉得"调用方法把自己消耗了"很奇怪——大多数方法确实用 `&self` 借用。但消耗 self 是 Rust 精心设计的功能，有几个重要场景：
+
+**1. Builder 模式（链式调用）**
+
+```rust
+let request = RequestBuilder::new()
+    .url("https://example.com")    // 消耗旧 self，返回新 self
+    .header("Auth", "token")
+    .build();                       // 最终消耗 builder，生成 Request
+```
+
+**2. 类型状态转换**
+
+```rust
+// 订单状态机
+impl Unpaid {
+    fn pay(self, amount: u64) -> Paid {  // 消耗 Unpaid，变成 Paid
+        Paid { amount }
+    }
+}
+// 付款后，Unpaid 不存在了——编译器强制你不能再用它！
+```
+
+**3. 资源的最终转换**
+
+```rust
+let bytes: Vec<u8> = my_string.into_bytes();  // String 变成字节数组
+// my_string 已被消耗，不能再用
+```
+
+**为什么这是好设计？**
+
+1. **防止误用**：转换后原对象不能再用，编译器帮你检查
+2. **零成本**：不需要克隆，直接移动内存
+3. **语义清晰**：`into_*` 命名明确告诉调用者"这会消耗资源"
+
+### 7. 借用返回值与原值的关系
+
+上面提到 `into_bytes()` 会消耗原 String。那如果你不想消耗原字符串，又想获取字节数据呢？
+
+**三种获取字节的方式**
+
+| 你想要的 | 方法 | 代价 |
+|---------|------|------|
+| 只读一下字节 | `as_bytes()` → `&[u8]` | 零成本 |
+| 要新的 Vec，保留原 String | `as_bytes().to_vec()` | 一次内存分配 |
+| 要 Vec，不再需要 String | `into_bytes()` | 零成本（直接移动）|
+
+```rust
+// 方式 1：只是借用
+let s = String::from("hello");
+let bytes: &[u8] = s.as_bytes();
+println!("{}", s);  // ✅ s 还在
+
+// 方式 2：复制一份
+let s2 = String::from("hello");
+let copied: Vec<u8> = s2.as_bytes().to_vec();
+println!("{}", s2);  // ✅ s2 还在
+
+// 方式 3：消耗原值
+let s3 = String::from("hello");
+let owned: Vec<u8> = s3.into_bytes();
+// println!("{}", s3);  // ❌ s3 没了
+```
+
+**`as_bytes()` 返回后，`bytes` 和 `s` 是什么关系？**
+
+`bytes` 实际上是指向 `s` 内部内存的一个"窗口"，它们**共享同一块内存**：
+
+```
+s: String
+┌──────────────────┐
+│ ptr ─────────────┼──────► [ h | e | l | l | o ]  ← 堆上的实际数据
+│ len: 5           │                 ▲
+│ capacity: 5      │                 │
+└──────────────────┘                 │
+                                     │
+bytes: &[u8]                         │
+┌──────────────────┐                 │
+│ ptr ─────────────┼─────────────────┘  (指向同一块内存)
+│ len: 5           │
+└──────────────────┘
+```
+
+**借用期间，原值被"锁住"**
+
+因为 `bytes` 借用着 `s`，在借用期间 `s` 受到限制：
+
+```rust
+// ✅ 可以读取 s
+let s = String::from("hello");
+let bytes = s.as_bytes();
+println!("{}", s);  // 读取没问题
+println!("{:?}", bytes);
+```
+
+```rust
+// ❌ 不能修改 s
+let mut s = String::from("hello");
+let bytes = s.as_bytes();  // 开始借用
+s.push_str(" world");  // 编译错误！bytes 还借用着它
+println!("{:?}", bytes);
+```
+
+```rust
+// ❌ 不能移动/消耗 s
+let s = String::from("hello");
+let bytes = s.as_bytes();
+drop(s);  // 编译错误！不能在借用期间丢弃
+println!("{:?}", bytes);
+```
+
+**为什么不能在借用期间修改？**
+
+想象如果允许修改：
+
+```rust
+let mut s = String::from("hello");
+let bytes = s.as_bytes();  // bytes 指向 "hello" 的内存
+
+s.push_str(" world");      // String 可能重新分配内存！
+                           // 原来的内存可能被释放了
+
+println!("{:?}", bytes);   // 💥 bytes 指向已释放的内存！
+```
+
+Rust 的借用规则就是为了在编译期阻止这种危险。
+
+**借用什么时候结束？**
+
+编译器会追踪 `bytes` 的**最后一次使用**：
+
+```rust
+let mut s = String::from("hello");
+let bytes = s.as_bytes();
+println!("{:?}", bytes);  // bytes 最后一次使用
+                          // ↓ 从这里开始，借用结束
+
+s.push_str(" world");     // ✅ 现在可以修改了
+println!("{}", s);
+```
+
+这个特性叫 **NLL（Non-Lexical Lifetimes）**，我们会在下一章详细讲解。
+
+**Rust 的设计哲学**
+
+其他语言可能这样写：
+
+```java
+// Java
+byte[] bytes = s.getBytes();  // 复制了？没复制？谁知道呢
+```
+
+Rust 强迫你明确选择：
+
+```rust
+// Rust
+let bytes = s.into_bytes();      // 我知道 s 没了
+let bytes = s.as_bytes().to_vec(); // 我知道这会复制
+```
+
+所以当你发现 `into_*` 会消耗所有权时，Rust 其实在问你：
+
+> "你真的不要原来那个了吗？还是你其实想要 `as_*` 或 `to_*`？"
+
+这就是 API 设计在帮你思考。
+
 ---
 
 ## 逐步实现 uniq-rs
@@ -407,7 +576,7 @@ fn main() {
 }
 ```
 
-这样可以工作，但有个问题：每次都在移动 `line`。
+这样可以工作。每次循环都把 `line` 移动到 `prev_line`，这是正确的做法。
 
 ### 步骤 3：理解发生了什么
 
@@ -716,7 +885,7 @@ $ cat data.txt | uniq-rs -c
       1 apple
 ```
 
-提示：需要一个计数器变量。
+提示：需要一个计数器变量。这个练习会在第 5 章详细实现。
 
 ---
 
