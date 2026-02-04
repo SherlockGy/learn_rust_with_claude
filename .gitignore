@@ -5,3 +5,4 @@ target/
 **/target/
 .claude
 homework/
+del_nul.bat

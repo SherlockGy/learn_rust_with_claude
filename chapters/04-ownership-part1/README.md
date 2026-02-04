@@ -203,6 +203,26 @@ println!("x = {}, y = {}", x, y);  // 都有效！
 
 **命名解释**：Copy 是一个 trait（特性），实现了 Copy 的类型在赋值时会自动复制。
 
+**Copy 的安全设计**
+
+你可能会想：Copy 是按位复制（浅复制），会不会像 Java 的浅克隆一样有问题？
+
+答案是**不会**。Rust 设计保证：**能实现 Copy 的类型，一定是安全的类型**。
+
+包含以下内容的类型，Rust **不允许**实现 Copy：
+- 堆上的数据（String、Vec）
+- 文件句柄、网络连接等资源
+
+```rust
+#[derive(Copy, Clone)]
+struct Person { name: String }  // 编译错误！String 不是 Copy
+
+#[derive(Copy, Clone)]
+struct Point { x: i32, y: i32 }  // OK，i32 是 Copy
+```
+
+**为什么？** 如果允许 String 实现 Copy，复制后两个变量指向同一块堆内存，一个释放后另一个就是悬垂指针。所以 Rust 从类型系统层面禁止了这种情况。
+
 ### 4. 克隆（Clone）
 
 如果确实需要深拷贝，使用 `clone()`：
@@ -241,6 +261,45 @@ Rust 的原则：**你不为你不用的东西付费**。
 - 如果语言偷偷帮你 clone，你可能不知道每次赋值都在"花钱"
 
 所以 Rust 选择：显式优于隐式。想 clone 就自己写 `.clone()`。
+
+**与 Java clone() 的对比**
+
+Java 的 `clone()` 默认是浅拷贝，容易导致隐蔽 bug：
+
+```java
+// Java 浅克隆陷阱
+class Team implements Cloneable {
+    List<String> members;
+}
+
+Team a = new Team();
+a.members = new ArrayList<>(Arrays.asList("Alice"));
+
+Team b = (Team) a.clone();
+b.members.add("Bob");  // 修改 b
+
+System.out.println(a.members);  // [Alice, Bob] — a 也被改了！
+```
+
+两个对象共享同一个 List，修改一个影响另一个。
+
+**Rust 的 Clone 不同**：`#[derive(Clone)]` 会递归调用所有字段的 `clone()`：
+
+```rust
+#[derive(Clone)]
+struct Team { members: Vec<String> }
+
+let a = Team { members: vec!["Alice".into()] };
+let mut b = a.clone();  // 深克隆！
+b.members.push("Bob".into());
+
+println!("{:?}", a.members);  // ["Alice"] — 不受影响
+```
+
+| 方面 | Java clone() | Rust Clone |
+|------|-------------|------------|
+| 默认行为 | 浅拷贝 | 深克隆 |
+| 共享引用问题 | 常见陷阱 | 不存在 |
 
 **为什么 `vec.push(item)` 要拿走 item 的所有权？**
 
